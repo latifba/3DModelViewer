@@ -1,0 +1,66 @@
+<html>
+  <head>
+
+    <script id="vertex-shader" type="x-shader/x-vertex" >
+      precision mediump float;
+
+      attribute vec4 aPosition;
+      attribute vec3 aBC;
+
+      uniform mat4 uTransMat, uWorld, uCamera, uProject;
+
+      varying vec3 vBC;
+
+      void main() {
+
+          gl_Position = uProject * uCamera * uWorld * uTransMat * aPosition;
+          vBC = aBC;
+      }
+    </script>
+
+    <script id="fragment-shader" type="x-shader/x-fragment">
+      #extension GL_OES_standard_derivatives : enable
+      precision mediump float;
+
+      varying vec3 vBC;
+
+      uniform vec4 uEdgeColor;
+
+      float edgeFactor(){
+          vec3 d = fwidth(vBC);
+          vec3 a3 = smoothstep(vec3(0.0), d*1.5, vBC);
+          return min(min(a3.x, a3.y), a3.z);
+      }
+
+      void main(){
+         vec4 tmp;
+         tmp = uEdgeColor;
+         tmp.a = (1.0-edgeFactor())*0.95;
+
+        gl_FragColor.rgb = mix(vec3(0.0), vec3(0.5), edgeFactor());
+        gl_FragColor.a = 1.0;
+      }
+    </script>
+
+    <script type="text/javascript" src="../Common/webgl-utils.js"></script>
+    <script type="text/javascript" src="../Common/initShaders.js"></script>
+    <script type="text/javascript" src="../Common/MV.js"></script>
+
+    <script type="text/javascript" src="bunny.js"></script>
+
+    <script type="text/javascript" src="canvas.js"></script>
+    <script type="text/javascript" src="modelDisplay.js"></script>
+    <script type="text/javascript" src="SceneObject.js"></script>
+    <script type="text/javascript" src="OFFparse.js"></script>
+
+  </head>
+
+  <body>
+      <input id="file" type="file">
+      <textarea id="JSON"></textarea>
+      <button onclick="copyJSON()">Copy JSON</button>
+      <a href="#" download="model" id="downloadJSON">Download JSON</a>
+  </body>
+  <script type="text/javascript" src="main.js"></script>
+
+</html>
