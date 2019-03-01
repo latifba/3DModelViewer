@@ -7,12 +7,14 @@ function SceneObject(canvas, modelDisplay) {
 }
 
 SceneObject.prototype = {
-	Display: function() {
+	Display: function(type) {
+        type = type ? type : "TRIANGLES" // if type is null, type = TRIANGLES
+
 		canvas.gl.uniform4fv(canvas.edgeColorPos, flatten(this.lineColor))
 		canvas.gl.uniformMatrix4fv(canvas.transMatPos, false, flatten(this.transMat))
-		this.modelDisplay.Display()
+		this.modelDisplay.Display(type)
 	},
-	
+
 	Color: function(color) { this.lineColor = color },
 
 	Recalculate: function() { // updates transMat
@@ -22,11 +24,11 @@ SceneObject.prototype = {
 	},
 
 	// transMats minipulation methods
-	Push: function(mat) { 
+	Push: function(mat) {
 		this.transMats.push(mat)
 		this.Recalculate()
 	},
-	Pop: function() { 
+	Pop: function() {
 		this.transMats.pop()
 		this.Recalculate()
 	},

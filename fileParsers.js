@@ -2,12 +2,12 @@
 function rangeXYZ(triangles) {
 	// object that holds model information
 	let range = {
-		abs: [0, 0], // min and max values of all vertex coords
+		scaler: 0, // min and max values of all vertex coords
 		max: [0,0,0], // [max of xs, min of ys, max of zs]
 		min: [0,0,0], // [min of xs, min of ys, min of zs]
 		center: [0, 0, 0] // center of model
 	}
- 
+
 	triangles.forEach((el)=>{ // loop through each vertex
 		// find max & min of x
 		if (el[0] > range.max[0])
@@ -26,18 +26,30 @@ function rangeXYZ(triangles) {
 			range.min[2] = el[2]
 	})
 	// take an average of min & max to find center
-	range.center = [(range.min[0] + range.max[0])/2, 
-	                (range.min[1] + range.max[1])/2, 
+	range.center = [(range.min[0] + range.max[0])/2,
+	                (range.min[1] + range.max[1])/2,
 	                (range.min[2] + range.max[2])/2]
-	// loop through each coord to find the min & max coords
+
+	// loop through min & max to find longest span (across x, y, or z)
 	for (var i = 0; i < 3; i++) {
-		if (range.min[i] < range.abs[i])
-			range.abs[i] = range.min[i]
-		if (range.max[i] > range.abs[i])
-			range.abs[i] = range.max[i]
+		let span = Math.abs(range.max[i] - range.min[i])
+		if (range.scaler < span)
+			range.scaler = span
 	}
 
 	return range
+}
+
+// scale and center model
+function standardTransform(triangles) {
+	let range = rangeXYZ(triangles)
+
+	for (let i = 0; i < triangles.length; i++) {
+		triangles[i] = subtract(triangles[i], range.center)
+		triangles[i] = scale(1/range.scaler, triangles[i])
+	}
+
+	return triangles
 }
 
 function OFFparse(offObj, fileArr) {
@@ -64,8 +76,6 @@ function OFFparse(offObj, fileArr) {
 		}
 	})
 
-	offObj.Triangles = standardTransform(offObj.Triangles)
-
 	return offObj
 }
 
@@ -90,56 +100,144 @@ function OBJparse(objObj, fileArr) {
 		}
 	})
 
-	objObj.Triangles = standardTransform(objObj.Triangles)
-
 	return objObj
 }
 
 // takes file name and its content
 // returns model object for the modelDisplay constructor
 function ParseModelFile(fileName, content) {
+	let modelName = fileName.split('.')[0]
 	let fileExt = fileName.split(".")[1] // "filename.ext" -> ["filename", "ext"]
 	let fileArr = content.split("\n") // make file into an array of lines
 
 	let fileObj = {
+		name: modelName,
 		Triangles: [],
 		BC: [],
-		Normals: []
+		vertNormals: []
 	}
 
 	// determine file extension
 	if (fileExt == "off")
 		fileObj = OFFparse(fileObj, fileArr)
-
 	if (fileExt == "obj")
 		fileObj = OBJparse(fileObj, fileArr)
+	if (fileExt == "json")
+		fileObj = JSON.parse(content)
 
-	fileObj.Normals = getNormals(fileObj.Triangles)
+	fileObj.Triangles = standardTransform(fileObj.Triangles)
+	fileObj.vertNormals = getNormals(fileObj.Triangles)
 
 	return fileObj
 }
 
-// scale and center model
-function standardTransform(triangles) {
-	let range = rangeXYZ(triangles)
-	let scaler = Math.abs(range.abs[1] - range.abs[0])
-	if (scaler < 1) // if scaler is < 1
-		scaler = 1 // don't scale
+// return vertex and normal pairs
+function getNormals(triangles) {
+	let normals = [] // each normal corresponding vertex
+	let verts = {} // maps a vertex to an array of normals {[...]: [[...],[...],[...]], ...}
+	let vertArr = [] // each vertex in model
+	let vertNormals = {
+		verts: [],
+		normals: []
+	}
 
-	for (let v = 0; v < triangles.length; v++) 
-		for (let d = 0; d < 3; d++) {
-			triangles[v][d] -= range.center[d]
-			triangles[v][d] /= scaler
+	for (var i = 0; i < triangles.length; i+=3) { // loop through all triangles
+		// calculate a surface normal for a triangle
+		let u = subtract(triangles[i+1], triangles[i])
+		let v = subtract(triangles[i+2], triangles[i])
+		let normal = cross(u, v)
+		scaleNormal(normal) // scale normal
+
+		for (var j = 0; j < 3; j++) { // loop through each vertex of the triangle
+			if (verts[triangles[i+j]])  { // if this vertex exists in our map
+				if (!containsArr(verts[triangles[i+j]], normal)) // and if its normal is unique
+					verts[triangles[i+j]].push(normal) // add to the vertex's list of normals
+			}
+			else { // else add the vertex to the map and initialize its normal array
+				verts[triangles[i+j]] = [normal]
+				vertArr.push(triangles[i+j]) // add vertex to our list of verices (no duplicates)
+			}
 		}
+	}
 
-	return triangles
+	for (var i = 0; i < vertArr.length; i++) { // loop through each unique vertex
+		let normAvg = [0,0,0]
+		let normNum = verts[vertArr[i]].length // number of normals associated with the vertex
+
+		for (var j = 0; j < normNum; j++) // sum of normals
+			normAvg = add(verts[vertArr[i]][j], normAvg)
+
+		normAvg = scale(1/normNum, normAvg) // devide sum by number of normals
+		normals.push(normAvg) // store average
+	}
+
+	for (var i = 0; i < normals.length; i++)
+		normals[i] = add(normals[i], vertArr[i]) // translate normal to their corresponding vertex
+
+	// save in obj
+	vertNormals.verts = vertArr
+	vertNormals.normals = normals
+
+	return vertNormals
 }
 
-function getNormals(triangles) {
-	let normals = []
+// return if arr1 == arr2
+function isSameArr(arr1, arr2) {
+	if (arr1.length != arr2.length)
+		return false
 
-	for (var i = 0; i < triangles.length; i+=3)
-		normals.push(cross(triangles[i], triangles[i+1]))
+	for (var i = 0; i < arr1.length; i++)
+		if (arr1[i] != arr2[i])
+			return false
 
-	return normals
+	return true
+}
+
+// return if arr2 is in arr1
+function containsArr(arr1, arr2) {
+	for (var i = 0; i < arr1.length; i++)
+		if (isSameArr(arr1[i], arr2))
+			return true
+	return false
+}
+
+// make normal lines the same length
+function scaleNormal(normal) {
+	// find max value in the vector
+	let max = 0
+	for (var i = 0; i < normal.length; i++)
+		if (Math.abs(normal[i]) > max)
+			max = Math.abs(normal[i])
+
+	if (max == 0)
+		return
+
+	for (var i = 0; i < normal.length; i++)
+		normal[i] /= (4*max) // scale down by max*4
+}
+
+// return a file's content from its url
+function readTextFile(file)
+{
+	let content = ""
+    var rawFile = new XMLHttpRequest()
+
+    rawFile.onreadystatechange = function ()
+    {
+        if(rawFile.status === 200 || rawFile.readyState == 4)
+			content = rawFile.responseText
+    }
+	rawFile.open("GET", file, false)
+    rawFile.send()
+	return content
+}
+
+function LoadModelFile(fileName, content) {
+	const PROXY = "https://cors-anywhere.herokuapp.com/"
+	const MODEL_DIR = "csci323.cs.edinboro.edu/~l804564b/Models/"
+
+	if (content)
+		return ParseModelFile(fileName, content) // parse local file
+	else
+		return ParseModelFile(fileName, readTextFile(PROXY + MODEL_DIR + fileName)) // parse file from server
 }

@@ -29,7 +29,9 @@ function ModelDisplay(canvas, model) {
 };
 
 ModelDisplay.prototype= {
-     Display() {
+    Display(type) {
+        type = type ? type : "TRIANGLES"; // if type is null, type = TRIANGLES
+
         var gl = this.gl;
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.vboTriangles);
@@ -38,6 +40,6 @@ ModelDisplay.prototype= {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.vboBC);
         gl.vertexAttribPointer(this.vBC,3,gl.FLOAT, false,0,0);
 
-        gl.drawArrays(gl.TRIANGLES, 0, this.pointCount);
-     }
+        gl.drawArrays(gl[type], 0, this.pointCount);
+    }
 };
