@@ -107,7 +107,7 @@ function OBJparse(objObj, fileArr) {
 // returns model object for the modelDisplay constructor
 function ParseModelFile(fileName, content) {
 	let modelName = fileName.split('.')[0]
-	let fileExt = fileName.split(".")[1] // "filename.ext" -> ["filename", "ext"]
+	let fileExt = fileName.split(".")[1].toLowerCase() // "filename.ext" -> ["filename", "ext"]
 	let fileArr = content.split("\n") // make file into an array of lines
 
 	let fileObj = {

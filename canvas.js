@@ -1,25 +1,26 @@
 'use strict';
 
+// create canvas element
 function MakeCanvas(width, height, locID) {
-
+    // default dimensions
     if (width == undefined || width < 0) {
        width = 300;
     }
-
     if (height == undefined || height < 0) {
        height = 300;
     }
 
-    var canvas = document.createElement('canvas')
+    let canvas = document.createElement('canvas')
     canvas.tabIndex = 0;
     canvas.height = height;
     canvas.width = width;
     canvas.style.border = "1px solid #0000FF";
 
+    // append to another element
     if(!locID) {
         document.body.appendChild(canvas);
     } else {
-        div = document.getElementById(locID);
+        let div = document.getElementById(locID);
         if (null == div) {
             document.body.appendChild(canvas);
         } else {
@@ -27,12 +28,12 @@ function MakeCanvas(width, height, locID) {
         }
     }
 
-    document.body.appendChild(canvas);
     return canvas;
 }
 
+// initialize webGL canvas
 function InitGL(canvas) {
-    var gl =  WebGLUtils.setupWebGL(canvas,'OES_standard_derivatives');
+    let gl =  WebGLUtils.setupWebGL(canvas,'OES_standard_derivatives');
     if (!gl) {
         alert ("WebGL isn't available");
     }
@@ -41,21 +42,25 @@ function InitGL(canvas) {
     return gl;
 }
 
+// canvas constructor
 function Canvas(width, height, locID) {
     this.disp = MakeCanvas(width, height, locID);
 
     var gl = InitGL(this.disp);
     this.gl = gl;
 
+    // get canvas position
     var tmpCanvas = this;
     this.x = this.disp.offsetLeft;
     this.y = this.disp.offsetTop;
 
     gl.viewport(0,0, width, height);
 
+    // grab shaders
     this.program = initShaders(gl, "vertex-shader","fragment-shader");
     gl.useProgram(this.program);
 
+    // shader attributes
     this.transMatPos = gl.getUniformLocation(this.program, "uTransMat");
     this.worldMatPos = gl.getUniformLocation(this.program, "uWorld");
     this.edgeColorPos = gl.getUniformLocation(this.program, "uEdgeColor");
@@ -70,7 +75,7 @@ function Canvas(width, height, locID) {
 }
 
 Canvas.prototype = {
-
+    // setup canvas ands 3D rendering options
     Init: function() {
         this.gl.clearColor(1.0, 1.0, 1.0, 1.0);
 
@@ -90,7 +95,7 @@ Canvas.prototype = {
 
         this.Reset();
     },
-
+    // update world rotation
     Rotate: function(axis, dir) {
         var change = 5;
         if (dir =='r') {
@@ -102,7 +107,7 @@ Canvas.prototype = {
            case 'z': this.zr += change; break;
         }
     },
-
+    // reset world rotation & camera options
     Reset: function() {
         this.xr = 0;
         this.yr = 0;
@@ -110,7 +115,7 @@ Canvas.prototype = {
 
         this.ex = 0;
         this.ey = 0;
-        this.ez = -1.5;
+        this.ez = 1.2;
 
         this.atx = 0;
         this.aty = 0;
@@ -126,37 +131,40 @@ Canvas.prototype = {
         this.rotAtX = 0;
         this.rotAtY = 0;
         this.d = this.atz - this.ez;
-        
+
         this.RedoProjectionMatrix();
     },
 
+    // send updated projection matrix to the shader
     RedoProjectionMatrix: function() {
         var mat = perspective(this.fovy, this.aspect, this.near, this.far);
         this.gl.uniformMatrix4fv(this.projectionMatPos,false,flatten(mat));
     },
 
+    // change the near aspect of the clipping space
     ChangeNear(dir) {
-        this.near +=dir * 0.1;
+        this.near += dir * 0.1;
         this.near = Math.max(this.near, 0.1)
         this.RedoProjectionMatrix();
     },
 
+    // see 'turn look at.jpg'
     MoveCamera: function(dvec) {
         var posDelta = 1;
         var rot = (2*Math.PI)*(this.rotMV/360);
 
         if (this.ex <= -99 && dvec[0] > 0 || this.ex >= 99 && dvec[0] < 0) {dvec[0] = 0}
         if (this.ez <= -99 && dvec[2] < 0 || this.ez >= 99 && dvec[2] < 0) {dvec[2] = 0}
-        
-        this.ex -= dvec[0]*Math.sin(rot); 
-        this.ey += dvec[1]*posDelta; 
-        this.ez += dvec[2]*Math.cos(rot); 
+
+        this.ex -= dvec[0]*Math.sin(rot);
+        this.ey += dvec[1]*posDelta;
+        this.ez += dvec[2]*Math.cos(rot);
 
         this.atx -= dvec[0]*Math.sin(rot);
-        this.aty += dvec[1]*posDelta; 
-        this.atz += dvec[2]*Math.cos(rot); 
+        this.aty += dvec[1]*posDelta;
+        this.atz += dvec[2]*Math.cos(rot);
 
-        this.RedoCameraMat(); 
+        this.RedoCameraMat();
     },
 
     TurnMoveVector: function(dir) {
@@ -165,10 +173,10 @@ Canvas.prototype = {
         this.rotMV += dir*rotDelta;
     },
 
+    // see 'turn look at.jpg'
     MoveEye: function(dvec) {
         var posDelta = 1;
         var rotDelta = 1;
-        console.log('d: ', this.d);
 
         this.rotAtX -= dvec[0]*rotDelta;
         this.rotAtY += dvec[1]*rotDelta;
@@ -186,9 +194,10 @@ Canvas.prototype = {
         else
             this.aty = this.d*Math.sin(rotY);
 
-        this.RedoCameraMat(); 
+        this.RedoCameraMat();
     },
 
+    // change how wide the eye sees
     ChangeFOV: function(dir) {
         var delta = 1;
 
@@ -200,6 +209,7 @@ Canvas.prototype = {
         this.RedoProjectionMatrix();
     },
 
+    // change resolution
     ChangeAspect: function(dir) {
         var delta = .1;
 
@@ -211,15 +221,15 @@ Canvas.prototype = {
         this.RedoProjectionMatrix();
     },
 
+    // send camera matrix to shader
     RedoCameraMat: function() {
-    var cameraMatrix = lookAt([this.ex, this.ey, this.ez], 
-                               [this.atx, this.aty, this.atz], 
+    var cameraMatrix = lookAt([this.ex, this.ey, this.ez],
+                               [this.atx, this.aty, this.atz],
                    [0,1,0]);
         this.gl.uniformMatrix4fv(this.cameraMatPos,false,flatten(cameraMatrix));
     },
 
-
-
+    // clear canvas & send world rotation matrix to shader
     Redisplay: function() {
         this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
 
